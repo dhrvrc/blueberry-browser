@@ -1,36 +1,37 @@
 import { contextBridge } from "electron";
 import { electronAPI } from "@electron-toolkit/preload";
+import { typedInvoke } from "./typed-invoke";
 
 // TopBar specific APIs
 const topBarAPI = {
   // Tab management
   createTab: (url?: string) =>
-    electronAPI.ipcRenderer.invoke("create-tab", url),
+    typedInvoke("create-tab", url),
   closeTab: (tabId: string) =>
-    electronAPI.ipcRenderer.invoke("close-tab", tabId),
+    typedInvoke("close-tab", tabId),
   switchTab: (tabId: string) =>
-    electronAPI.ipcRenderer.invoke("switch-tab", tabId),
-  getTabs: () => electronAPI.ipcRenderer.invoke("get-tabs"),
+    typedInvoke("switch-tab", tabId),
+  getTabs: () => typedInvoke("get-tabs"),
 
   // Tab navigation
   navigateTab: (tabId: string, url: string) =>
-    electronAPI.ipcRenderer.invoke("navigate-tab", tabId, url),
+    typedInvoke("navigate-tab", tabId, url),
   goBack: (tabId: string) =>
-    electronAPI.ipcRenderer.invoke("tab-go-back", tabId),
+    typedInvoke("tab-go-back", tabId),
   goForward: (tabId: string) =>
-    electronAPI.ipcRenderer.invoke("tab-go-forward", tabId),
+    typedInvoke("tab-go-forward", tabId),
   reload: (tabId: string) =>
-    electronAPI.ipcRenderer.invoke("tab-reload", tabId),
+    typedInvoke("tab-reload", tabId),
 
   // Tab actions
   tabScreenshot: (tabId: string) =>
-    electronAPI.ipcRenderer.invoke("tab-screenshot", tabId),
+    typedInvoke("tab-screenshot", tabId),
   tabRunJs: (tabId: string, code: string) =>
-    electronAPI.ipcRenderer.invoke("tab-run-js", tabId, code),
+    typedInvoke("tab-run-js", tabId, code),
 
   // Sidebar
   toggleSidebar: () =>
-    electronAPI.ipcRenderer.invoke("toggle-sidebar"),
+    typedInvoke("toggle-sidebar"),
 };
 
 // Use `contextBridge` APIs to expose Electron APIs to

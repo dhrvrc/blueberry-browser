@@ -1,5 +1,6 @@
 import { contextBridge } from "electron";
 import { electronAPI } from "@electron-toolkit/preload";
+import { typedInvoke } from "./typed-invoke";
 
 interface ChatRequest {
   message: string;
@@ -16,11 +17,11 @@ interface ChatResponse {
 const sidebarAPI = {
   // Chat functionality
   sendChatMessage: (request: ChatRequest) =>
-    electronAPI.ipcRenderer.invoke("sidebar-chat-message", request),
+    typedInvoke("sidebar-chat-message", request),
 
-  clearChat: () => electronAPI.ipcRenderer.invoke("sidebar-clear-chat"),
+  clearChat: () => typedInvoke("sidebar-clear-chat"),
 
-  getMessages: () => electronAPI.ipcRenderer.invoke("sidebar-get-messages"),
+  getMessages: () => typedInvoke("sidebar-get-messages"),
 
   onChatResponse: (callback: (data: ChatResponse) => void) => {
     electronAPI.ipcRenderer.on("chat-response", (_, data) => callback(data));
@@ -41,9 +42,9 @@ const sidebarAPI = {
   },
 
   // Page content access
-  getPageContent: () => electronAPI.ipcRenderer.invoke("get-page-content"),
-  getPageText: () => electronAPI.ipcRenderer.invoke("get-page-text"),
-  getCurrentUrl: () => electronAPI.ipcRenderer.invoke("get-current-url"),
+  getPageContent: () => typedInvoke("get-page-content"),
+  getPageText: () => typedInvoke("get-page-text"),
+  getCurrentUrl: () => typedInvoke("get-current-url"),
 };
 
 // Use `contextBridge` APIs to expose Electron APIs to

@@ -1,5 +1,6 @@
 import { ipcMain, WebContents } from "electron";
 import type { Window } from "./Window";
+import { typedHandle } from "./typed-handle";
 
 export class EventManager {
   private mainWindow: Window;
@@ -28,23 +29,23 @@ export class EventManager {
 
   private handleTabEvents(): void {
     // Create new tab
-    ipcMain.handle("create-tab", (_, url?: string) => {
+    typedHandle("create-tab", (_, url?) => {
       const newTab = this.mainWindow.createTab(url);
       return { id: newTab.id, title: newTab.title, url: newTab.url };
     });
 
     // Close tab
-    ipcMain.handle("close-tab", (_, id: string) => {
+    typedHandle("close-tab", (_, id) => {
       this.mainWindow.closeTab(id);
     });
 
     // Switch tab
-    ipcMain.handle("switch-tab", (_, id: string) => {
+    typedHandle("switch-tab", (_, id) => {
       this.mainWindow.switchActiveTab(id);
     });
 
     // Get tabs
-    ipcMain.handle("get-tabs", () => {
+    typedHandle("get-tabs", () => {
       const activeTabId = this.mainWindow.activeTab?.id;
       return this.mainWindow.allTabs.map((tab) => ({
         id: tab.id,
@@ -54,7 +55,7 @@ export class EventManager {
       }));
     });
 
-    ipcMain.handle("navigate-tab", async (_, tabId: string, url: string) => {
+    typedHandle("navigate-tab", async (_, tabId, url) => {
       const tab = this.mainWindow.getTab(tabId);
       if (tab) {
         await tab.loadURL(url);
@@ -64,7 +65,7 @@ export class EventManager {
     });
 
     // Tab-specific navigation handlers
-    ipcMain.handle("tab-go-back", (_, tabId: string) => {
+    typedHandle("tab-go-back", (_, tabId) => {
       const tab = this.mainWindow.getTab(tabId);
       if (tab) {
         tab.goBack();
@@ -73,7 +74,7 @@ export class EventManager {
       return false;
     });
 
-    ipcMain.handle("tab-go-forward", (_, tabId: string) => {
+    typedHandle("tab-go-forward", (_, tabId) => {
       const tab = this.mainWindow.getTab(tabId);
       if (tab) {
         tab.goForward();
@@ -82,7 +83,7 @@ export class EventManager {
       return false;
     });
 
-    ipcMain.handle("tab-reload", (_, tabId: string) => {
+    typedHandle("tab-reload", (_, tabId) => {
       const tab = this.mainWindow.getTab(tabId);
       if (tab) {
         tab.reload();
@@ -91,7 +92,7 @@ export class EventManager {
       return false;
     });
 
-    ipcMain.handle("tab-screenshot", async (_, tabId: string) => {
+    typedHandle("tab-screenshot", async (_, tabId) => {
       const tab = this.mainWindow.getTab(tabId);
       if (tab) {
         const image = await tab.screenshot();
@@ -100,7 +101,7 @@ export class EventManager {
       return null;
     });
 
-    ipcMain.handle("tab-run-js", async (_, tabId: string, code: string) => {
+    typedHandle("tab-run-js", async (_, tabId, code) => {
       const tab = this.mainWindow.getTab(tabId);
       if (tab) {
         return await tab.runJs(code);
@@ -111,33 +112,33 @@ export class EventManager {
 
   private handleSidebarEvents(): void {
     // Toggle sidebar
-    ipcMain.handle("toggle-sidebar", () => {
+    typedHandle("toggle-sidebar", () => {
       this.mainWindow.sidebar.toggle();
       this.mainWindow.updateAllBounds();
       return true;
     });
 
     // Chat message
-    ipcMain.handle("sidebar-chat-message", async (_, request) => {
+    typedHandle("sidebar-chat-message", async (_, request) => {
       // The LLMClient now handles getting the screenshot and context directly
       await this.mainWindow.sidebar.client.sendChatMessage(request);
     });
 
     // Clear chat
-    ipcMain.handle("sidebar-clear-chat", () => {
+    typedHandle("sidebar-clear-chat", () => {
       this.mainWindow.sidebar.client.clearMessages();
       return true;
     });
 
     // Get messages
-    ipcMain.handle("sidebar-get-messages", () => {
+    typedHandle("sidebar-get-messages", () => {
       return this.mainWindow.sidebar.client.getMessages();
     });
   }
 
   private handlePageContentEvents(): void {
     // Get page content
-    ipcMain.handle("get-page-content", async () => {
+    typedHandle("get-page-content", async () => {
       if (this.mainWindow.activeTab) {
         try {
           return await this.mainWindow.activeTab.getTabHtml();
@@ -150,7 +151,7 @@ export class EventManager {
     });
 
     // Get page text
-    ipcMain.handle("get-page-text", async () => {
+    typedHandle("get-page-text", async () => {
       if (this.mainWindow.activeTab) {
         try {
           return await this.mainWindow.activeTab.getTabText();
@@ -163,7 +164,7 @@ export class EventManager {
     });
 
     // Get current URL
-    ipcMain.handle("get-current-url", () => {
+    typedHandle("get-current-url", () => {
       if (this.mainWindow.activeTab) {
         return this.mainWindow.activeTab.url;
       }
