@@ -1,6 +1,7 @@
 import { contextBridge } from "electron";
 import { electronAPI } from "@electron-toolkit/preload";
 import { typedInvoke } from "./typed-invoke";
+import type { CoreMessage } from "ai";
 
 interface ChatRequest {
   message: string;
@@ -27,7 +28,7 @@ const sidebarAPI = {
     electronAPI.ipcRenderer.on("chat-response", (_, data) => callback(data));
   },
 
-  onMessagesUpdated: (callback: (messages: any[]) => void) => {
+  onMessagesUpdated: (callback: (messages: CoreMessage[]) => void) => {
     electronAPI.ipcRenderer.on("chat-messages-updated", (_, messages) =>
       callback(messages)
     );

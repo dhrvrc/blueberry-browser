@@ -1,4 +1,5 @@
 import { ElectronAPI } from "@electron-toolkit/preload";
+import type { CoreMessage } from "ai";
 
 interface ChatRequest {
   message: string;
@@ -14,8 +15,12 @@ interface ChatResponse {
 interface SidebarAPI {
   // Chat functionality
   sendChatMessage: (request: ChatRequest) => Promise<void>;
+  clearChat: () => Promise<void>;
+  getMessages: () => Promise<CoreMessage[]>;
   onChatResponse: (callback: (data: ChatResponse) => void) => void;
+  onMessagesUpdated: (callback: (messages: CoreMessage[]) => void) => void;
   removeChatResponseListener: () => void;
+  removeMessagesUpdatedListener: () => void;
 
   // Page content access
   getPageContent: () => Promise<string | null>;
@@ -29,4 +34,3 @@ declare global {
     sidebarAPI: SidebarAPI;
   }
 }
-

@@ -1,5 +1,5 @@
 import { WebContents } from "electron";
-import { streamText, type LanguageModel, type CoreMessage } from "ai";
+import { streamText, type LanguageModel, type CoreMessage, type ImagePart, type TextPart } from "ai";
 import { openai } from "@ai-sdk/openai";
 import { anthropic } from "@ai-sdk/anthropic";
 import * as dotenv from "dotenv";
@@ -112,7 +112,7 @@ export class LLMClient {
       }
 
       // Build user message content with screenshot first, then text
-      const userContent: any[] = [];
+      const userContent: Array<ImagePart | TextPart> = [];
       
       // Add screenshot as the first part if available
       if (screenshot) {
