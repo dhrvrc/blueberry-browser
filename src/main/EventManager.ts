@@ -28,6 +28,8 @@ export class EventManager {
   }
 
   private handleTabEvents(): void {
+    const tabService = this.mainWindow.tabService;
+
     // Create new tab
     typedHandle("create-tab", (_, url?) => {
       const newTab = this.mainWindow.createTab(url);
@@ -56,57 +58,38 @@ export class EventManager {
     });
 
     typedHandle("navigate-tab", async (_, tabId, url) => {
-      const tab = this.mainWindow.getTab(tabId);
-      if (tab) {
-        await tab.loadURL(url);
-        return true;
-      }
-      return false;
+      if (!this.mainWindow.getTab(tabId)) return false;
+      await tabService.navigate(tabId, url);
+      return true;
     });
 
     // Tab-specific navigation handlers
     typedHandle("tab-go-back", (_, tabId) => {
-      const tab = this.mainWindow.getTab(tabId);
-      if (tab) {
-        tab.goBack();
-        return true;
-      }
-      return false;
+      if (!this.mainWindow.getTab(tabId)) return false;
+      tabService.goBack(tabId);
+      return true;
     });
 
     typedHandle("tab-go-forward", (_, tabId) => {
-      const tab = this.mainWindow.getTab(tabId);
-      if (tab) {
-        tab.goForward();
-        return true;
-      }
-      return false;
+      if (!this.mainWindow.getTab(tabId)) return false;
+      tabService.goForward(tabId);
+      return true;
     });
 
     typedHandle("tab-reload", (_, tabId) => {
-      const tab = this.mainWindow.getTab(tabId);
-      if (tab) {
-        tab.reload();
-        return true;
-      }
-      return false;
+      if (!this.mainWindow.getTab(tabId)) return false;
+      tabService.reload(tabId);
+      return true;
     });
 
     typedHandle("tab-screenshot", async (_, tabId) => {
-      const tab = this.mainWindow.getTab(tabId);
-      if (tab) {
-        const image = await tab.screenshot();
-        return image.toDataURL();
-      }
-      return null;
+      if (!this.mainWindow.getTab(tabId)) return null;
+      return tabService.screenshot(tabId);
     });
 
     typedHandle("tab-run-js", async (_, tabId, code) => {
-      const tab = this.mainWindow.getTab(tabId);
-      if (tab) {
-        return await tab.runJs(code);
-      }
-      return null;
+      if (!this.mainWindow.getTab(tabId)) return null;
+      return tabService.runJs(tabId, code);
     });
   }
 
@@ -137,30 +120,30 @@ export class EventManager {
   }
 
   private handlePageContentEvents(): void {
+    const tabService = this.mainWindow.tabService;
+
     // Get page content
     typedHandle("get-page-content", async () => {
-      if (this.mainWindow.activeTab) {
-        try {
-          return await this.mainWindow.activeTab.getTabHtml();
-        } catch (error) {
-          console.error("Error getting page content:", error);
-          return null;
-        }
+      const active = this.mainWindow.activeTab;
+      if (!active) return null;
+      try {
+        return await tabService.getHtml(active.id);
+      } catch (error) {
+        console.error("Error getting page content:", error);
+        return null;
       }
-      return null;
     });
 
     // Get page text
     typedHandle("get-page-text", async () => {
-      if (this.mainWindow.activeTab) {
-        try {
-          return await this.mainWindow.activeTab.getTabText();
-        } catch (error) {
-          console.error("Error getting page text:", error);
-          return null;
-        }
+      const active = this.mainWindow.activeTab;
+      if (!active) return null;
+      try {
+        return await tabService.getText(active.id);
+      } catch (error) {
+        console.error("Error getting page text:", error);
+        return null;
       }
-      return null;
     });
 
     // Get current URL

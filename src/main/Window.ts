@@ -2,6 +2,7 @@ import { BaseWindow, shell } from "electron";
 import { Tab } from "./Tab";
 import { TopBar } from "./TopBar";
 import { SideBar } from "./SideBar";
+import { TabService } from "./TabService";
 import { TOPBAR_HEIGHT, SIDEBAR_WIDTH } from "./constants";
 
 export class Window {
@@ -11,6 +12,10 @@ export class Window {
   private tabCounter: number = 0;
   private _topBar: TopBar;
   private _sideBar: SideBar;
+  private _tabService: TabService = new TabService(
+    (id) => this.tabsMap.get(id) ?? null,
+    () => this.activeTab
+  );
 
   constructor() {
     // Create the browser window.
@@ -260,6 +265,11 @@ export class Window {
   // Getter for topBar to access from main process
   get topBar(): TopBar {
     return this._topBar;
+  }
+
+  // Getter for tabService to access from EventManager and agent code
+  get tabService(): TabService {
+    return this._tabService;
   }
 
   // Getter for all tabs as array
