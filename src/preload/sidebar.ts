@@ -3,11 +3,6 @@ import { electronAPI } from "@electron-toolkit/preload";
 
 interface ChatRequest {
   message: string;
-  context: {
-    url: string | null;
-    content: string | null;
-    text: string | null;
-  };
   messageId: string;
 }
 
@@ -20,7 +15,7 @@ interface ChatResponse {
 // Sidebar specific APIs
 const sidebarAPI = {
   // Chat functionality
-  sendChatMessage: (request: Partial<ChatRequest>) =>
+  sendChatMessage: (request: ChatRequest) =>
     electronAPI.ipcRenderer.invoke("sidebar-chat-message", request),
 
   clearChat: () => electronAPI.ipcRenderer.invoke("sidebar-clear-chat"),
