@@ -54,13 +54,6 @@ export class EventManager {
       }));
     });
 
-    // Navigation (for compatibility with existing code)
-    ipcMain.handle("navigate-to", (_, url: string) => {
-      if (this.mainWindow.activeTab) {
-        this.mainWindow.activeTab.loadURL(url);
-      }
-    });
-
     ipcMain.handle("navigate-tab", async (_, tabId: string, url: string) => {
       const tab = this.mainWindow.getTab(tabId);
       if (tab) {
@@ -68,24 +61,6 @@ export class EventManager {
         return true;
       }
       return false;
-    });
-
-    ipcMain.handle("go-back", () => {
-      if (this.mainWindow.activeTab) {
-        this.mainWindow.activeTab.goBack();
-      }
-    });
-
-    ipcMain.handle("go-forward", () => {
-      if (this.mainWindow.activeTab) {
-        this.mainWindow.activeTab.goForward();
-      }
-    });
-
-    ipcMain.handle("reload", () => {
-      if (this.mainWindow.activeTab) {
-        this.mainWindow.activeTab.reload();
-      }
     });
 
     // Tab-specific navigation handlers
@@ -129,21 +104,6 @@ export class EventManager {
       const tab = this.mainWindow.getTab(tabId);
       if (tab) {
         return await tab.runJs(code);
-      }
-      return null;
-    });
-
-    // Tab info
-    ipcMain.handle("get-active-tab-info", () => {
-      const activeTab = this.mainWindow.activeTab;
-      if (activeTab) {
-        return {
-          id: activeTab.id,
-          url: activeTab.url,
-          title: activeTab.title,
-          canGoBack: activeTab.webContents.canGoBack(),
-          canGoForward: activeTab.webContents.canGoForward(),
-        };
       }
       return null;
     });

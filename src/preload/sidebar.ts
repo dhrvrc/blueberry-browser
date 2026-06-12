@@ -44,9 +44,6 @@ const sidebarAPI = {
   getPageContent: () => electronAPI.ipcRenderer.invoke("get-page-content"),
   getPageText: () => electronAPI.ipcRenderer.invoke("get-page-text"),
   getCurrentUrl: () => electronAPI.ipcRenderer.invoke("get-current-url"),
-
-  // Tab information
-  getActiveTabInfo: () => electronAPI.ipcRenderer.invoke("get-active-tab-info"),
 };
 
 // Use `contextBridge` APIs to expose Electron APIs to

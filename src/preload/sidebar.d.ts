@@ -11,13 +11,6 @@ interface ChatResponse {
   isComplete: boolean;
 }
 
-interface TabInfo {
-  id: string;
-  title: string;
-  url: string;
-  isActive: boolean;
-}
-
 interface SidebarAPI {
   // Chat functionality
   sendChatMessage: (request: ChatRequest) => Promise<void>;
@@ -28,9 +21,6 @@ interface SidebarAPI {
   getPageContent: () => Promise<string | null>;
   getPageText: () => Promise<string | null>;
   getCurrentUrl: () => Promise<string | null>;
-
-  // Tab information
-  getActiveTabInfo: () => Promise<TabInfo | null>;
 }
 
 declare global {
