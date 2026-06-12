@@ -2,6 +2,7 @@ import { BaseWindow, shell } from "electron";
 import { Tab } from "./Tab";
 import { TopBar } from "./TopBar";
 import { SideBar } from "./SideBar";
+import { TOPBAR_HEIGHT, SIDEBAR_WIDTH } from "./constants";
 
 export class Window {
   private _baseWindow: BaseWindow;
@@ -100,9 +101,9 @@ export class Window {
     const bounds = this._baseWindow.getBounds();
     tab.view.setBounds({
       x: 0,
-      y: 88, // Start below the topbar
-      width: bounds.width - 400, // Subtract sidebar width
-      height: bounds.height - 88, // Subtract topbar height
+      y: TOPBAR_HEIGHT, // Start below the topbar
+      width: bounds.width - SIDEBAR_WIDTH, // Subtract sidebar width
+      height: bounds.height - TOPBAR_HEIGHT, // Subtract topbar height
     });
 
     // Store the tab
@@ -233,14 +234,14 @@ export class Window {
   private updateTabBounds(): void {
     const bounds = this._baseWindow.getBounds();
     // Only subtract sidebar width if it's visible
-    const sidebarWidth = this._sideBar.getIsVisible() ? 400 : 0;
+    const sidebarWidth = this._sideBar.getIsVisible() ? SIDEBAR_WIDTH : 0;
 
     this.tabsMap.forEach((tab) => {
       tab.view.setBounds({
         x: 0,
-        y: 88, // Start below the topbar
+        y: TOPBAR_HEIGHT, // Start below the topbar
         width: bounds.width - sidebarWidth,
-        height: bounds.height - 88, // Subtract topbar height
+        height: bounds.height - TOPBAR_HEIGHT, // Subtract topbar height
       });
     });
   }

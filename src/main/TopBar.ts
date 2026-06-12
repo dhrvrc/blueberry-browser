@@ -1,6 +1,7 @@
 import { is } from "@electron-toolkit/utils";
 import { BaseWindow, WebContentsView } from "electron";
 import { join } from "path";
+import { TOPBAR_HEIGHT } from "./constants";
 
 export class TopBar {
   private webContentsView: WebContentsView;
@@ -46,7 +47,7 @@ export class TopBar {
       x: 0,
       y: 0,
       width: bounds.width,
-      height: 88, // Fixed height for topbar (40px tabs + 48px address bar)
+      height: TOPBAR_HEIGHT, // Fixed height for topbar (40px tabs + 48px address bar)
     });
   }
 
