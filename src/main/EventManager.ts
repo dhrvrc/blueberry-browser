@@ -1,5 +1,6 @@
 import { ipcMain, WebContents } from "electron";
 import type { Window } from "./Window";
+import { typedHandle } from "./typed-handle";
 
 export class EventManager {
   private mainWindow: Window;
@@ -27,24 +28,26 @@ export class EventManager {
   }
 
   private handleTabEvents(): void {
+    const tabService = this.mainWindow.tabService;
+
     // Create new tab
-    ipcMain.handle("create-tab", (_, url?: string) => {
+    typedHandle("create-tab", (_, url?) => {
       const newTab = this.mainWindow.createTab(url);
       return { id: newTab.id, title: newTab.title, url: newTab.url };
     });
 
     // Close tab
-    ipcMain.handle("close-tab", (_, id: string) => {
+    typedHandle("close-tab", (_, id) => {
       this.mainWindow.closeTab(id);
     });
 
     // Switch tab
-    ipcMain.handle("switch-tab", (_, id: string) => {
+    typedHandle("switch-tab", (_, id) => {
       this.mainWindow.switchActiveTab(id);
     });
 
     // Get tabs
-    ipcMain.handle("get-tabs", () => {
+    typedHandle("get-tabs", () => {
       const activeTabId = this.mainWindow.activeTab?.id;
       return this.mainWindow.allTabs.map((tab) => ({
         id: tab.id,
@@ -54,156 +57,97 @@ export class EventManager {
       }));
     });
 
-    // Navigation (for compatibility with existing code)
-    ipcMain.handle("navigate-to", (_, url: string) => {
-      if (this.mainWindow.activeTab) {
-        this.mainWindow.activeTab.loadURL(url);
-      }
-    });
-
-    ipcMain.handle("navigate-tab", async (_, tabId: string, url: string) => {
-      const tab = this.mainWindow.getTab(tabId);
-      if (tab) {
-        await tab.loadURL(url);
-        return true;
-      }
-      return false;
-    });
-
-    ipcMain.handle("go-back", () => {
-      if (this.mainWindow.activeTab) {
-        this.mainWindow.activeTab.goBack();
-      }
-    });
-
-    ipcMain.handle("go-forward", () => {
-      if (this.mainWindow.activeTab) {
-        this.mainWindow.activeTab.goForward();
-      }
-    });
-
-    ipcMain.handle("reload", () => {
-      if (this.mainWindow.activeTab) {
-        this.mainWindow.activeTab.reload();
-      }
+    typedHandle("navigate-tab", async (_, tabId, url) => {
+      if (!this.mainWindow.getTab(tabId)) return false;
+      await tabService.navigate(tabId, url);
+      return true;
     });
 
     // Tab-specific navigation handlers
-    ipcMain.handle("tab-go-back", (_, tabId: string) => {
-      const tab = this.mainWindow.getTab(tabId);
-      if (tab) {
-        tab.goBack();
-        return true;
-      }
-      return false;
+    typedHandle("tab-go-back", (_, tabId) => {
+      if (!this.mainWindow.getTab(tabId)) return false;
+      tabService.goBack(tabId);
+      return true;
     });
 
-    ipcMain.handle("tab-go-forward", (_, tabId: string) => {
-      const tab = this.mainWindow.getTab(tabId);
-      if (tab) {
-        tab.goForward();
-        return true;
-      }
-      return false;
+    typedHandle("tab-go-forward", (_, tabId) => {
+      if (!this.mainWindow.getTab(tabId)) return false;
+      tabService.goForward(tabId);
+      return true;
     });
 
-    ipcMain.handle("tab-reload", (_, tabId: string) => {
-      const tab = this.mainWindow.getTab(tabId);
-      if (tab) {
-        tab.reload();
-        return true;
-      }
-      return false;
+    typedHandle("tab-reload", (_, tabId) => {
+      if (!this.mainWindow.getTab(tabId)) return false;
+      tabService.reload(tabId);
+      return true;
     });
 
-    ipcMain.handle("tab-screenshot", async (_, tabId: string) => {
-      const tab = this.mainWindow.getTab(tabId);
-      if (tab) {
-        const image = await tab.screenshot();
-        return image.toDataURL();
-      }
-      return null;
+    typedHandle("tab-screenshot", async (_, tabId) => {
+      if (!this.mainWindow.getTab(tabId)) return null;
+      return tabService.screenshot(tabId);
     });
 
-    ipcMain.handle("tab-run-js", async (_, tabId: string, code: string) => {
-      const tab = this.mainWindow.getTab(tabId);
-      if (tab) {
-        return await tab.runJs(code);
-      }
-      return null;
-    });
-
-    // Tab info
-    ipcMain.handle("get-active-tab-info", () => {
-      const activeTab = this.mainWindow.activeTab;
-      if (activeTab) {
-        return {
-          id: activeTab.id,
-          url: activeTab.url,
-          title: activeTab.title,
-          canGoBack: activeTab.webContents.canGoBack(),
-          canGoForward: activeTab.webContents.canGoForward(),
-        };
-      }
-      return null;
+    typedHandle("tab-run-js", async (_, tabId, code) => {
+      if (!this.mainWindow.getTab(tabId)) return null;
+      return tabService.runJs(tabId, code);
     });
   }
 
   private handleSidebarEvents(): void {
     // Toggle sidebar
-    ipcMain.handle("toggle-sidebar", () => {
+    typedHandle("toggle-sidebar", () => {
       this.mainWindow.sidebar.toggle();
       this.mainWindow.updateAllBounds();
       return true;
     });
 
     // Chat message
-    ipcMain.handle("sidebar-chat-message", async (_, request) => {
+    typedHandle("sidebar-chat-message", async (_, request) => {
       // The LLMClient now handles getting the screenshot and context directly
       await this.mainWindow.sidebar.client.sendChatMessage(request);
     });
 
     // Clear chat
-    ipcMain.handle("sidebar-clear-chat", () => {
+    typedHandle("sidebar-clear-chat", () => {
       this.mainWindow.sidebar.client.clearMessages();
       return true;
     });
 
     // Get messages
-    ipcMain.handle("sidebar-get-messages", () => {
+    typedHandle("sidebar-get-messages", () => {
       return this.mainWindow.sidebar.client.getMessages();
     });
   }
 
   private handlePageContentEvents(): void {
+    const tabService = this.mainWindow.tabService;
+
     // Get page content
-    ipcMain.handle("get-page-content", async () => {
-      if (this.mainWindow.activeTab) {
-        try {
-          return await this.mainWindow.activeTab.getTabHtml();
-        } catch (error) {
-          console.error("Error getting page content:", error);
-          return null;
-        }
+    typedHandle("get-page-content", async () => {
+      const active = this.mainWindow.activeTab;
+      if (!active) return null;
+      try {
+        return await tabService.getHtml(active.id);
+      } catch (error) {
+        console.error("Error getting page content:", error);
+        return null;
       }
-      return null;
     });
 
     // Get page text
-    ipcMain.handle("get-page-text", async () => {
-      if (this.mainWindow.activeTab) {
-        try {
-          return await this.mainWindow.activeTab.getTabText();
-        } catch (error) {
-          console.error("Error getting page text:", error);
-          return null;
-        }
+    typedHandle("get-page-text", async () => {
+      const active = this.mainWindow.activeTab;
+      if (!active) return null;
+      try {
+        return await tabService.getText(active.id);
+      } catch (error) {
+        console.error("Error getting page text:", error);
+        return null;
       }
-      return null;
     });
 
     // Get current URL
-    ipcMain.handle("get-current-url", () => {
+    typedHandle("get-current-url", () => {
       if (this.mainWindow.activeTab) {
         return this.mainWindow.activeTab.url;
       }

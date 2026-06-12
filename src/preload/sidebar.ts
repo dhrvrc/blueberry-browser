@@ -1,13 +1,10 @@
 import { contextBridge } from "electron";
 import { electronAPI } from "@electron-toolkit/preload";
+import { typedInvoke } from "./typed-invoke";
+import type { CoreMessage } from "ai";
 
 interface ChatRequest {
   message: string;
-  context: {
-    url: string | null;
-    content: string | null;
-    text: string | null;
-  };
   messageId: string;
 }
 
@@ -20,18 +17,18 @@ interface ChatResponse {
 // Sidebar specific APIs
 const sidebarAPI = {
   // Chat functionality
-  sendChatMessage: (request: Partial<ChatRequest>) =>
-    electronAPI.ipcRenderer.invoke("sidebar-chat-message", request),
+  sendChatMessage: (request: ChatRequest) =>
+    typedInvoke("sidebar-chat-message", request),
 
-  clearChat: () => electronAPI.ipcRenderer.invoke("sidebar-clear-chat"),
+  clearChat: () => typedInvoke("sidebar-clear-chat"),
 
-  getMessages: () => electronAPI.ipcRenderer.invoke("sidebar-get-messages"),
+  getMessages: () => typedInvoke("sidebar-get-messages"),
 
   onChatResponse: (callback: (data: ChatResponse) => void) => {
     electronAPI.ipcRenderer.on("chat-response", (_, data) => callback(data));
   },
 
-  onMessagesUpdated: (callback: (messages: any[]) => void) => {
+  onMessagesUpdated: (callback: (messages: CoreMessage[]) => void) => {
     electronAPI.ipcRenderer.on("chat-messages-updated", (_, messages) =>
       callback(messages)
     );
@@ -46,12 +43,9 @@ const sidebarAPI = {
   },
 
   // Page content access
-  getPageContent: () => electronAPI.ipcRenderer.invoke("get-page-content"),
-  getPageText: () => electronAPI.ipcRenderer.invoke("get-page-text"),
-  getCurrentUrl: () => electronAPI.ipcRenderer.invoke("get-current-url"),
-
-  // Tab information
-  getActiveTabInfo: () => electronAPI.ipcRenderer.invoke("get-active-tab-info"),
+  getPageContent: () => typedInvoke("get-page-content"),
+  getPageText: () => typedInvoke("get-page-text"),
+  getCurrentUrl: () => typedInvoke("get-current-url"),
 };
 
 // Use `contextBridge` APIs to expose Electron APIs to

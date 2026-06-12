@@ -2,6 +2,8 @@ import { BaseWindow, shell } from "electron";
 import { Tab } from "./Tab";
 import { TopBar } from "./TopBar";
 import { SideBar } from "./SideBar";
+import { TabService } from "./TabService";
+import { TOPBAR_HEIGHT, SIDEBAR_WIDTH } from "./constants";
 
 export class Window {
   private _baseWindow: BaseWindow;
@@ -10,6 +12,10 @@ export class Window {
   private tabCounter: number = 0;
   private _topBar: TopBar;
   private _sideBar: SideBar;
+  private _tabService: TabService = new TabService(
+    (id) => this.tabsMap.get(id) ?? null,
+    () => this.activeTab
+  );
 
   constructor() {
     // Create the browser window.
@@ -26,10 +32,7 @@ export class Window {
     this._baseWindow.setMinimumSize(1000, 800);
 
     this._topBar = new TopBar(this._baseWindow);
-    this._sideBar = new SideBar(this._baseWindow);
-
-    // Set the window reference on the LLM client to avoid circular dependency
-    this._sideBar.client.setWindow(this);
+    this._sideBar = new SideBar(this._baseWindow, this._tabService.activeTab);
 
     // Create the first tab
     this.createTab();
@@ -100,9 +103,9 @@ export class Window {
     const bounds = this._baseWindow.getBounds();
     tab.view.setBounds({
       x: 0,
-      y: 88, // Start below the topbar
-      width: bounds.width - 400, // Subtract sidebar width
-      height: bounds.height - 88, // Subtract topbar height
+      y: TOPBAR_HEIGHT, // Start below the topbar
+      width: bounds.width - SIDEBAR_WIDTH, // Subtract sidebar width
+      height: bounds.height - TOPBAR_HEIGHT, // Subtract topbar height
     });
 
     // Store the tab
@@ -233,14 +236,14 @@ export class Window {
   private updateTabBounds(): void {
     const bounds = this._baseWindow.getBounds();
     // Only subtract sidebar width if it's visible
-    const sidebarWidth = this._sideBar.getIsVisible() ? 400 : 0;
+    const sidebarWidth = this._sideBar.getIsVisible() ? SIDEBAR_WIDTH : 0;
 
     this.tabsMap.forEach((tab) => {
       tab.view.setBounds({
         x: 0,
-        y: 88, // Start below the topbar
+        y: TOPBAR_HEIGHT, // Start below the topbar
         width: bounds.width - sidebarWidth,
-        height: bounds.height - 88, // Subtract topbar height
+        height: bounds.height - TOPBAR_HEIGHT, // Subtract topbar height
       });
     });
   }
@@ -259,6 +262,11 @@ export class Window {
   // Getter for topBar to access from main process
   get topBar(): TopBar {
     return this._topBar;
+  }
+
+  // Getter for tabService to access from EventManager and agent code
+  get tabService(): TabService {
+    return this._tabService;
   }
 
   // Getter for all tabs as array

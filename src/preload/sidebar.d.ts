@@ -1,12 +1,8 @@
 import { ElectronAPI } from "@electron-toolkit/preload";
+import type { CoreMessage } from "ai";
 
 interface ChatRequest {
   message: string;
-  context: {
-    url: string | null;
-    content: string | null;
-    text: string | null;
-  };
   messageId: string;
 }
 
@@ -16,26 +12,20 @@ interface ChatResponse {
   isComplete: boolean;
 }
 
-interface TabInfo {
-  id: string;
-  title: string;
-  url: string;
-  isActive: boolean;
-}
-
 interface SidebarAPI {
   // Chat functionality
   sendChatMessage: (request: ChatRequest) => Promise<void>;
+  clearChat: () => Promise<void>;
+  getMessages: () => Promise<CoreMessage[]>;
   onChatResponse: (callback: (data: ChatResponse) => void) => void;
+  onMessagesUpdated: (callback: (messages: CoreMessage[]) => void) => void;
   removeChatResponseListener: () => void;
+  removeMessagesUpdatedListener: () => void;
 
   // Page content access
   getPageContent: () => Promise<string | null>;
   getPageText: () => Promise<string | null>;
   getCurrentUrl: () => Promise<string | null>;
-
-  // Tab information
-  getActiveTabInfo: () => Promise<TabInfo | null>;
 }
 
 declare global {
@@ -44,4 +34,3 @@ declare global {
     sidebarAPI: SidebarAPI;
   }
 }
-

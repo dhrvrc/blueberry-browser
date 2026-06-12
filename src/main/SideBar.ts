@@ -2,6 +2,8 @@ import { is } from "@electron-toolkit/utils";
 import { BaseWindow, WebContentsView } from "electron";
 import { join } from "path";
 import { LLMClient } from "./LLMClient";
+import { TOPBAR_HEIGHT, SIDEBAR_WIDTH } from "./constants";
+import type { Tab } from "./Tab";
 
 export class SideBar {
   private webContentsView: WebContentsView;
@@ -9,14 +11,18 @@ export class SideBar {
   private llmClient: LLMClient;
   private isVisible: boolean = true;
 
-  constructor(baseWindow: BaseWindow) {
+  constructor(baseWindow: BaseWindow, getActiveTab: () => Tab | null) {
     this.baseWindow = baseWindow;
     this.webContentsView = this.createWebContentsView();
     baseWindow.contentView.addChildView(this.webContentsView);
     this.setupBounds();
 
-    // Initialize LLM client
-    this.llmClient = new LLMClient(this.webContentsView.webContents);
+    // Initialize LLM client with a resolver for the active tab (avoids a
+    // circular Window <-> LLMClient dependency).
+    this.llmClient = new LLMClient(
+      this.webContentsView.webContents,
+      getActiveTab
+    );
   }
 
   private createWebContentsView(): WebContentsView {
@@ -51,10 +57,10 @@ export class SideBar {
 
     const bounds = this.baseWindow.getBounds();
     this.webContentsView.setBounds({
-      x: bounds.width - 400, // 400px width sidebar on the right
-      y: 88, // Start below the topbar
-      width: 400,
-      height: bounds.height - 88, // Subtract topbar height
+      x: bounds.width - SIDEBAR_WIDTH, // sidebar on the right
+      y: TOPBAR_HEIGHT, // Start below the topbar
+      width: SIDEBAR_WIDTH,
+      height: bounds.height - TOPBAR_HEIGHT, // Subtract topbar height
     });
   }
 
