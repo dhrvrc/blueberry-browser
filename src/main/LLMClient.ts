@@ -4,7 +4,7 @@ import { openai } from "@ai-sdk/openai";
 import { anthropic } from "@ai-sdk/anthropic";
 import * as dotenv from "dotenv";
 import { join } from "path";
-import type { Window } from "./Window";
+import type { Tab } from "./Tab";
 
 // Load environment variables from .env file
 dotenv.config({ path: join(__dirname, "../../.env") });
@@ -31,24 +31,20 @@ const DEFAULT_TEMPERATURE = 0.7;
 
 export class LLMClient {
   private readonly webContents: WebContents;
-  private window: Window | null = null;
+  private readonly getActiveTab: () => Tab | null;
   private readonly provider: LLMProvider;
   private readonly modelName: string;
   private readonly model: LanguageModel | null;
   private messages: CoreMessage[] = [];
 
-  constructor(webContents: WebContents) {
+  constructor(webContents: WebContents, getActiveTab: () => Tab | null) {
     this.webContents = webContents;
+    this.getActiveTab = getActiveTab;
     this.provider = this.getProvider();
     this.modelName = this.getModelName();
     this.model = this.initializeModel();
 
     this.logInitializationStatus();
-  }
-
-  // Set the window reference after construction to avoid circular dependencies
-  setWindow(window: Window): void {
-    this.window = window;
   }
 
   private getProvider(): LLMProvider {
@@ -105,15 +101,13 @@ export class LLMClient {
     try {
       // Get screenshot from active tab if available
       let screenshot: string | null = null;
-      if (this.window) {
-        const activeTab = this.window.activeTab;
-        if (activeTab) {
-          try {
-            const image = await activeTab.screenshot();
-            screenshot = image.toDataURL();
-          } catch (error) {
-            console.error("Failed to capture screenshot:", error);
-          }
+      const activeTab = this.getActiveTab();
+      if (activeTab) {
+        try {
+          const image = await activeTab.screenshot();
+          screenshot = image.toDataURL();
+        } catch (error) {
+          console.error("Failed to capture screenshot:", error);
         }
       }
 
@@ -178,16 +172,14 @@ export class LLMClient {
     // Get page context from active tab
     let pageUrl: string | null = null;
     let pageText: string | null = null;
-    
-    if (this.window) {
-      const activeTab = this.window.activeTab;
-      if (activeTab) {
-        pageUrl = activeTab.url;
-        try {
-          pageText = await activeTab.getTabText();
-        } catch (error) {
-          console.error("Failed to get page text:", error);
-        }
+
+    const activeTab = this.getActiveTab();
+    if (activeTab) {
+      pageUrl = activeTab.url;
+      try {
+        pageText = await activeTab.getTabText();
+      } catch (error) {
+        console.error("Failed to get page text:", error);
       }
     }
 

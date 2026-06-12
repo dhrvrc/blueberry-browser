@@ -32,10 +32,7 @@ export class Window {
     this._baseWindow.setMinimumSize(1000, 800);
 
     this._topBar = new TopBar(this._baseWindow);
-    this._sideBar = new SideBar(this._baseWindow);
-
-    // Set the window reference on the LLM client to avoid circular dependency
-    this._sideBar.client.setWindow(this);
+    this._sideBar = new SideBar(this._baseWindow, this._tabService.activeTab);
 
     // Create the first tab
     this.createTab();
