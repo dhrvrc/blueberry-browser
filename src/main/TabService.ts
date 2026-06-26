@@ -7,7 +7,13 @@ import type { Tab } from "./Tab";
 export class TabService {
   constructor(
     private readonly getTab: (id: string) => Tab | null,
-    private readonly getActiveTab: () => Tab | null
+    private readonly getActiveTab: () => Tab | null,
+    /** Optional: provision a hidden background tab for agent use. */
+    private readonly createBgTab?: () => Tab,
+    /** Optional: tear down a background tab by id. */
+    private readonly destroyBgTab?: (id: string) => void,
+    /** Optional: open a user-visible tab (creates + focuses it). */
+    private readonly createUserTabCb?: (url: string) => Tab,
   ) {}
 
   /** Resolver for the currently active tab — passed to LLMClient/agent. */
@@ -50,5 +56,39 @@ export class TabService {
 
   getText(tabId: string): Promise<string> {
     return this.require(tabId).getTabText();
+  }
+
+  /**
+   * Provision a hidden background tab for a child agent.
+   * Returns the new tab's id. Throws if not wired (Window didn't pass createBgTab).
+   */
+  createBackgroundTab(): string {
+    if (!this.createBgTab) {
+      throw new Error("TabService: createBackgroundTab not wired — createBgTab callback is missing");
+    }
+    const tab = this.createBgTab();
+    return tab.id;
+  }
+
+  /**
+   * Tear down a background tab created by createBackgroundTab.
+   * No-op if not wired.
+   */
+  destroyBackgroundTab(id: string): void {
+    if (this.destroyBgTab) {
+      this.destroyBgTab(id);
+    }
+  }
+
+  /**
+   * Open a user-visible tab at `url` (creates the tab and focuses it).
+   * Returns the new tab's id. Throws if not wired (Window didn't pass createUserTabCb).
+   */
+  openUserTab(url: string): string {
+    if (!this.createUserTabCb) {
+      throw new Error("TabService: openUserTab not wired — createUserTabCb callback is missing");
+    }
+    const tab = this.createUserTabCb(url);
+    return tab.id;
   }
 }

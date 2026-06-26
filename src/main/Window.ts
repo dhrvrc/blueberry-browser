@@ -10,11 +10,16 @@ export class Window {
   private tabsMap: Map<string, Tab> = new Map();
   private activeTabId: string | null = null;
   private tabCounter: number = 0;
+  /** Tab IDs created for agent background use — excluded from get-tabs. */
+  private backgroundTabIds: Set<string> = new Set();
   private _topBar: TopBar;
   private _sideBar: SideBar;
   private _tabService: TabService = new TabService(
     (id) => this.tabsMap.get(id) ?? null,
-    () => this.activeTab
+    () => this.activeTab,
+    () => this.createBackgroundTab(),
+    (id) => this.destroyTab(id),
+    (url) => { const t = this.createTab(url); this.switchActiveTab(t.id); return t; },
   );
 
   constructor() {
@@ -32,7 +37,7 @@ export class Window {
     this._baseWindow.setMinimumSize(1000, 800);
 
     this._topBar = new TopBar(this._baseWindow);
-    this._sideBar = new SideBar(this._baseWindow, this._tabService.activeTab);
+    this._sideBar = new SideBar(this._baseWindow, this._tabService.activeTab, this._tabService);
 
     // Create the first tab
     this.createTab();
@@ -83,8 +88,14 @@ export class Window {
     return null;
   }
 
+  /** All tabs, including agent-owned tabs (shown in the strip, never auto-focused). */
   get allTabs(): Tab[] {
     return Array.from(this.tabsMap.values());
+  }
+
+  /** Agent-owned tab ids — surfaced so the strip can label them by owner. */
+  get agentTabIds(): string[] {
+    return Array.from(this.backgroundTabIds);
   }
 
   get tabCount(): number {
@@ -136,6 +147,7 @@ export class Window {
 
     // Remove from our tabs map
     this.tabsMap.delete(tabId);
+    this.backgroundTabIds.delete(tabId); // keep agent-tab set consistent
 
     // If this was the active tab, switch to another tab
     if (this.activeTabId === tabId) {
@@ -160,17 +172,13 @@ export class Window {
       return false;
     }
 
-    // Hide the currently active tab
-    if (this.activeTabId && this.activeTabId !== tabId) {
-      const currentTab = this.tabsMap.get(this.activeTabId);
-      if (currentTab) {
-        currentTab.hide();
-      }
-    }
-
-    // Show the new active tab
+    // Bring the new active tab to the TOP of the view stack. We no longer
+    // hide other tabs (agent tabs must keep rendering behind this one), so
+    // visibility is purely z-order: re-adding a child view puts it on top.
     tab.show();
+    this._baseWindow.contentView.addChildView(tab.view);
     this.activeTabId = tabId;
+    this.updateTabBounds();
 
     // Update the window title to match the tab title
     this._baseWindow.setTitle(tab.title || "Blueberry Browser");
@@ -180,6 +188,54 @@ export class Window {
 
   getTab(tabId: string): Tab | null {
     return this.tabsMap.get(tabId) || null;
+  }
+
+  /**
+   * Create a hidden background tab for agent use. Never switches active tab,
+   * never sets visible bounds. Tracked in backgroundTabIds so get-tabs excludes it.
+   */
+  createBackgroundTab(): Tab {
+    const tabId = `tab-${++this.tabCounter}`;
+    const tab = new Tab(tabId);
+    // Add BELOW the active tab so it renders but stays hidden behind it. A
+    // setVisible(false) view is throttled by Chromium and won't fully load
+    // pages — agents need it rendering, just not in front of the user.
+    const activeView = this.activeTabId ? this.tabsMap.get(this.activeTabId)?.view : undefined;
+    if (activeView) {
+      const idx = this._baseWindow.contentView.children.indexOf(activeView);
+      this._baseWindow.contentView.addChildView(tab.view, Math.max(0, idx));
+    } else {
+      this._baseWindow.contentView.addChildView(tab.view);
+    }
+    this.tabsMap.set(tabId, tab);
+    this.backgroundTabIds.add(tabId);
+    this.updateTabBounds(); // give it real bounds so the page actually renders
+    return tab;
+  }
+
+  /**
+   * Destroy a tab created by createBackgroundTab (or any tab). Null-safe.
+   * Removes from tabsMap and backgroundTabIds; never closes the window.
+   */
+  destroyTab(tabId: string): void {
+    const tab = this.tabsMap.get(tabId);
+    if (!tab) return;
+    try {
+      this._baseWindow.contentView.removeChildView(tab.view);
+      tab.destroy();
+    } catch {
+      // Ignore errors during cleanup (e.g. already-destroyed view).
+    }
+    this.tabsMap.delete(tabId);
+    this.backgroundTabIds.delete(tabId);
+
+    // If the user was viewing this agent tab, fall back to another tab so the
+    // content area doesn't go blank (mirrors closeTab's active-tab handling).
+    if (this.activeTabId === tabId) {
+      this.activeTabId = null;
+      const remaining = Array.from(this.tabsMap.keys());
+      if (remaining.length > 0) this.switchActiveTab(remaining[0]);
+    }
   }
 
   // Window methods
@@ -239,6 +295,10 @@ export class Window {
     const sidebarWidth = this._sideBar.getIsVisible() ? SIDEBAR_WIDTH : 0;
 
     this.tabsMap.forEach((tab) => {
+      // Every tab (incl. agent tabs) gets normal bounds so its page renders.
+      // Agent tabs sit BEHIND the active tab in the view stack, so they're
+      // hidden from the user but still load/render — a setVisible(false) or
+      // unbounded view is throttled by Chromium and won't load pages.
       tab.view.setBounds({
         x: 0,
         y: TOPBAR_HEIGHT, // Start below the topbar

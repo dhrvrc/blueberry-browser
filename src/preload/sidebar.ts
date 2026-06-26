@@ -2,6 +2,7 @@ import { contextBridge } from "electron";
 import { electronAPI } from "@electron-toolkit/preload";
 import { typedInvoke } from "./typed-invoke";
 import type { CoreMessage } from "ai";
+import type { AgentEvent, AutomationSummary } from "../shared/ipc-schema";
 
 interface ChatRequest {
   message: string;
@@ -30,7 +31,7 @@ const sidebarAPI = {
 
   onMessagesUpdated: (callback: (messages: CoreMessage[]) => void) => {
     electronAPI.ipcRenderer.on("chat-messages-updated", (_, messages) =>
-      callback(messages)
+      callback(messages),
     );
   },
 
@@ -46,6 +47,27 @@ const sidebarAPI = {
   getPageContent: () => typedInvoke("get-page-content"),
   getPageText: () => typedInvoke("get-page-text"),
   getCurrentUrl: () => typedInvoke("get-current-url"),
+
+  // Agent — lifecycle channels (request/response)
+  runAgent: (task: string) => typedInvoke("agent-run", task),
+  abortAgent: (agentId: string) => typedInvoke("agent-abort", agentId),
+  approveAction: (agentId: string, requestId: string, approved: boolean) =>
+    typedInvoke("agent-approval-response", agentId, requestId, approved),
+  saveAutomation: (agentId: string, name: string) =>
+    typedInvoke("agent-save", agentId, name),
+  replayAutomation: (automationId: string) =>
+    typedInvoke("agent-replay", automationId),
+  listAutomations: (): Promise<AutomationSummary[]> =>
+    typedInvoke("agent-list-automations"),
+  openFile: (url: string) => typedInvoke("agent-open-file", url),
+
+  // Agent — raw push channel (not in IpcSchema)
+  onAgentEvent: (callback: (event: AgentEvent) => void) => {
+    electronAPI.ipcRenderer.on("agent-event", (_, e) => callback(e));
+  },
+  removeAgentEventListener: () => {
+    electronAPI.ipcRenderer.removeAllListeners("agent-event");
+  },
 };
 
 // Use `contextBridge` APIs to expose Electron APIs to
