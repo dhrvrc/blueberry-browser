@@ -1,6 +1,7 @@
 import { ipcMain, WebContents } from "electron";
 import type { Window } from "./Window";
 import { typedHandle } from "./typed-handle";
+import { registerAgentIpc } from "./agent/AgentIPC";
 
 export class EventManager {
   private mainWindow: Window;
@@ -22,6 +23,9 @@ export class EventManager {
 
     // Dark mode events
     this.handleDarkModeEvents();
+
+    // Agent events
+    this.handleAgentEvents();
 
     // Debug events
     this.handleDebugEvents();
@@ -49,11 +53,13 @@ export class EventManager {
     // Get tabs
     typedHandle("get-tabs", () => {
       const activeTabId = this.mainWindow.activeTab?.id;
+      const agentTabIds = new Set(this.mainWindow.agentTabIds);
       return this.mainWindow.allTabs.map((tab) => ({
         id: tab.id,
         title: tab.title,
         url: tab.url,
         isActive: activeTabId === tab.id,
+        isAgent: agentTabIds.has(tab.id),
       }));
     });
 
@@ -160,6 +166,10 @@ export class EventManager {
     ipcMain.on("dark-mode-changed", (event, isDarkMode) => {
       this.broadcastDarkMode(event.sender, isDarkMode);
     });
+  }
+
+  private handleAgentEvents(): void {
+    registerAgentIpc(this.mainWindow.sidebar.agent);
   }
 
   private handleDebugEvents(): void {

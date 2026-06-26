@@ -4,14 +4,17 @@ import { join } from "path";
 import { LLMClient } from "./LLMClient";
 import { TOPBAR_HEIGHT, SIDEBAR_WIDTH } from "./constants";
 import type { Tab } from "./Tab";
+import type { TabService } from "./TabService";
+import { AgentService } from "./agent/AgentService";
 
 export class SideBar {
   private webContentsView: WebContentsView;
   private baseWindow: BaseWindow;
   private llmClient: LLMClient;
+  private _agentService: AgentService;
   private isVisible: boolean = true;
 
-  constructor(baseWindow: BaseWindow, getActiveTab: () => Tab | null) {
+  constructor(baseWindow: BaseWindow, getActiveTab: () => Tab | null, tabService: TabService) {
     this.baseWindow = baseWindow;
     this.webContentsView = this.createWebContentsView();
     baseWindow.contentView.addChildView(this.webContentsView);
@@ -21,7 +24,14 @@ export class SideBar {
     // circular Window <-> LLMClient dependency).
     this.llmClient = new LLMClient(
       this.webContentsView.webContents,
-      getActiveTab
+      getActiveTab,
+    );
+
+    // Agent service — shares the same LLMClient and tabService as chat.
+    this._agentService = new AgentService(
+      this.webContentsView.webContents,
+      tabService,
+      this.llmClient,
     );
   }
 
@@ -40,12 +50,12 @@ export class SideBar {
       // In development, load through Vite dev server
       const sidebarUrl = new URL(
         "/sidebar/",
-        process.env["ELECTRON_RENDERER_URL"]
+        process.env["ELECTRON_RENDERER_URL"],
       );
       webContentsView.webContents.loadURL(sidebarUrl.toString());
     } else {
       webContentsView.webContents.loadFile(
-        join(__dirname, "../renderer/sidebar.html")
+        join(__dirname, "../renderer/sidebar.html"),
       );
     }
 
@@ -84,6 +94,10 @@ export class SideBar {
 
   get client(): LLMClient {
     return this.llmClient;
+  }
+
+  get agent(): AgentService {
+    return this._agentService;
   }
 
   show(): void {

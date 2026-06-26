@@ -1,5 +1,6 @@
 import { ElectronAPI } from "@electron-toolkit/preload";
 import type { CoreMessage } from "ai";
+import type { AgentEvent, AutomationSummary } from "../shared/ipc-schema";
 
 interface ChatRequest {
   message: string;
@@ -26,6 +27,19 @@ interface SidebarAPI {
   getPageContent: () => Promise<string | null>;
   getPageText: () => Promise<string | null>;
   getCurrentUrl: () => Promise<string | null>;
+
+  // Agent — lifecycle
+  runAgent: (task: string) => Promise<{ agentId: string }>;
+  abortAgent: (agentId: string) => Promise<void>;
+  approveAction: (agentId: string, requestId: string, approved: boolean) => Promise<void>;
+  saveAutomation: (agentId: string, name: string) => Promise<{ id: string } | null>;
+  replayAutomation: (automationId: string) => Promise<{ agentId: string } | null>;
+  listAutomations: () => Promise<AutomationSummary[]>;
+  openFile: (url: string) => Promise<void>;
+
+  // Agent — event stream (raw push)
+  onAgentEvent: (callback: (event: AgentEvent) => void) => void;
+  removeAgentEventListener: () => void;
 }
 
 declare global {

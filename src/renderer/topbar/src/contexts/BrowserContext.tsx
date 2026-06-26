@@ -5,6 +5,7 @@ interface TabInfo {
     title: string
     url: string
     isActive: boolean
+    isAgent?: boolean
 }
 
 interface BrowserContextType {

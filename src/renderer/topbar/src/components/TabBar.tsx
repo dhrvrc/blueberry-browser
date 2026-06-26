@@ -11,6 +11,7 @@ interface TabItemProps {
     favicon?: string | null
     isActive: boolean
     isPinned?: boolean
+    isAgent?: boolean
     onClose: () => void
     onActivate: () => void
 }
@@ -20,6 +21,7 @@ const TabItem: React.FC<TabItemProps> = ({
     favicon,
     isActive,
     isPinned = false,
+    isAgent = false,
     onClose,
     onActivate
 }) => {
@@ -39,15 +41,15 @@ const TabItem: React.FC<TabItemProps> = ({
                 className={baseClassName}
                 onClick={() => !isActive && onActivate()}
             >
-                {/* Favicon */}
+                {/* Favicon — or the agent badge for agent-owned tabs */}
                 <div className={cn(!isPinned && "mr-2")}>
-                    <Favicon src={favicon} />
+                    {isAgent ? <span className="text-xs leading-none">🤖</span> : <Favicon src={favicon} />}
                 </div>
 
                 {/* Title (hide for pinned tabs) */}
                 {!isPinned && (
                     <span className="text-xs truncate max-w-[200px] flex-1">
-                        {title || 'New Tab'}
+                        {isAgent ? (title ? `agent · ${title}` : 'agent') : (title || 'New Tab')}
                     </span>
                 )}
 
@@ -104,6 +106,7 @@ export const TabBar: React.FC = () => {
                         title={tab.title}
                         favicon={getFavicon(tab.url)}
                         isActive={tab.isActive}
+                        isAgent={tab.isAgent}
                         onClose={() => closeTab(tab.id)}
                         onActivate={() => switchTab(tab.id)}
                     />
