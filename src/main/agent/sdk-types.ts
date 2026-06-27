@@ -51,8 +51,68 @@ interface BlueberryMcpFetch {
   get(args: { url: string }): Promise<{ status: number; text: string }>;
 }
 
+interface BlueberryMcpFs {
+  /** Read a file from the workspace. path is relative to the workspace root. */
+  read(args: { path: string }): Promise<string>;
+  /** Write a file to the workspace. path is relative. Returns ok and the relative path. */
+  write(args: { path: string; content: string }): Promise<{ ok: true; path: string }>;
+  /** List entries in a workspace directory. path defaults to the workspace root. */
+  list(args: { path?: string }): Promise<Array<{ name: string; isDir: boolean; size: number }>>;
+  /** Delete a file or directory in the workspace. path must be relative. */
+  delete(args: { path: string }): Promise<{ ok: true }>;
+}
+
+interface BlueberryMcpData {
+  /** Parse a CSV string into an array of row objects keyed by header. */
+  parseCsv(args: { content: string }): Promise<Array<Record<string, unknown>>>;
+  /** Parse a JSON string into an array of row objects. Accepts array, {data:[...]}, or {rows:[...]}. */
+  parseJson(args: { content: string }): Promise<Array<Record<string, unknown>>>;
+  /** Summarize rows: row count and per-column stats (type, count, nulls, distinct, min, max, mean, sample). */
+  summarize(args: { rows: Array<Record<string, unknown>> }): Promise<{
+    rowCount: number;
+    columns: Array<{
+      name: string;
+      type: "number" | "string";
+      count: number;
+      nulls: number;
+      distinct: number;
+      min: number | string | null;
+      max: number | string | null;
+      mean: number | null;
+      sample: unknown;
+    }>;
+  }>;
+  /** Group rows by a column and aggregate another column. op: "sum"|"avg"|"count"|"min"|"max". */
+  groupBy(args: {
+    rows: Array<Record<string, unknown>>;
+    by: string;
+    agg: { column: string; op: "sum" | "avg" | "count" | "min" | "max" };
+  }): Promise<Array<Record<string, unknown>>>;
+  /** Filter rows by a structured predicate. op: "eq"|"ne"|"gt"|"gte"|"lt"|"lte"|"contains". */
+  filter(args: {
+    rows: Array<Record<string, unknown>>;
+    where: { column: string; op: "eq" | "ne" | "gt" | "gte" | "lt" | "lte" | "contains"; value: string | number };
+  }): Promise<Array<Record<string, unknown>>>;
+  /** Sort rows by a column. dir defaults to "asc". Nulls sort last. */
+  sort(args: {
+    rows: Array<Record<string, unknown>>;
+    by: string;
+    dir?: "asc" | "desc";
+  }): Promise<Array<Record<string, unknown>>>;
+  /** Return the top n rows sorted descending by a numeric column. n defaults to 10. */
+  topN(args: {
+    rows: Array<Record<string, unknown>>;
+    by: string;
+    n?: number;
+  }): Promise<Array<Record<string, unknown>>>;
+}
+
 interface BlueberryMcp {
   fetch: BlueberryMcpFetch;
+  /** Sandboxed workspace filesystem: read/write/list/delete relative to ~/.blueberry/workspace/. */
+  fs: BlueberryMcpFs;
+  /** In-process DataFrame-lite: parse CSV/JSON, summarize, groupBy, filter, sort, topN. */
+  data: BlueberryMcpData;
 }
 
 declare const blueberry: {

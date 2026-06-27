@@ -3,8 +3,14 @@
  * "server" (named by string). Registering a real MCP-stdio or OAuth connector
  * is a matter of calling register() — no infrastructure changes needed.
  *
- * MVP ships one connector: "fetch" — blueberry.mcp.fetch.get({url}) → { status, text }
+ * Ships three built-in connectors:
+ *   "fetch" — blueberry.mcp.fetch.get({url}) → { status, text }
+ *   "fs"    — blueberry.mcp.fs.{read,write,list,delete} — sandboxed to ~/.blueberry/workspace/
+ *   "data"  — blueberry.mcp.data.* — stateless DataFrame-lite (parseCsv/parseJson/summarize/…)
  */
+import { FsConnector } from "./connectors/FsConnector";
+import { DataConnector } from "./connectors/DataConnector";
+
 export interface Connector {
   call(tool: string, args: unknown): Promise<unknown>;
 }
@@ -13,8 +19,10 @@ export class McpClient {
   private connectors = new Map<string, Connector>();
 
   constructor() {
-    // Register the built-in fetch connector (no OAuth, no external deps).
+    // Register the built-in connectors (no OAuth, no external deps).
     this.register("fetch", new FetchConnector());
+    this.register("fs", new FsConnector());
+    this.register("data", new DataConnector());
   }
 
   register(name: string, connector: Connector): void {

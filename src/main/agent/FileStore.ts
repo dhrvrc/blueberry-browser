@@ -3,6 +3,7 @@ import { join } from "path";
 import { homedir } from "os";
 import { randomUUID } from "crypto";
 import { pathToFileURL } from "url";
+import { parseCsvCells } from "./csv";
 // marked is a pure-JS CommonJS module — require() is the safe import form.
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { marked } = require("marked") as { marked: { parse(md: string): string } };
@@ -64,36 +65,8 @@ function escHtml(s: string): string {
 // CSV → HTML table
 // ---------------------------------------------------------------------------
 
-/** Parse a CSV string into rows of cells. Handles quoted fields (commas, newlines, escaped quotes). */
-function parseCsv(csv: string): string[][] {
-  const rows: string[][] = [];
-  let row: string[] = [];
-  let cell = "";
-  let inQ = false;
-  let i = 0;
-
-  while (i < csv.length) {
-    const ch = csv[i];
-    if (inQ) {
-      if (ch === '"' && csv[i + 1] === '"') {
-        cell += '"'; i += 2; continue;
-      }
-      if (ch === '"') { inQ = false; i++; continue; }
-      cell += ch; i++; continue;
-    }
-    if (ch === '"') { inQ = true; i++; continue; }
-    if (ch === ',') { row.push(cell); cell = ""; i++; continue; }
-    if (ch === '\r' && csv[i + 1] === '\n') { row.push(cell); cell = ""; rows.push(row); row = []; i += 2; continue; }
-    if (ch === '\n' || ch === '\r') { row.push(cell); cell = ""; rows.push(row); row = []; i++; continue; }
-    cell += ch; i++;
-  }
-  row.push(cell);
-  if (row.some(c => c !== "")) rows.push(row);
-  return rows;
-}
-
 function csvToHtml(csv: string): string {
-  const rows = parseCsv(csv);
+  const rows = parseCsvCells(csv);
   if (rows.length === 0) return "<p>No data.</p>";
 
   const tableStyle = `
