@@ -1,4 +1,4 @@
-import { BaseWindow, shell } from "electron";
+import { BaseWindow } from "electron";
 import { Tab } from "./Tab";
 import { TopBar } from "./TopBar";
 import { SideBar } from "./SideBar";
@@ -57,14 +57,6 @@ export class Window {
       }
     });
 
-    // Handle external link opening
-    this.tabsMap.forEach((tab) => {
-      tab.webContents.setWindowOpenHandler((details) => {
-        shell.openExternal(details.url);
-        return { action: "deny" };
-      });
-    });
-
     this.setupEventListeners();
   }
 
@@ -102,10 +94,16 @@ export class Window {
     return this.tabsMap.size;
   }
 
+  /** Open a link (from a page's target="_blank"/window.open) as a focused in-app tab. */
+  private openLinkInNewTab(url: string): void {
+    const tab = this.createTab(url);
+    this.switchActiveTab(tab.id);
+  }
+
   // Tab management methods
   createTab(url?: string): Tab {
     const tabId = `tab-${++this.tabCounter}`;
-    const tab = new Tab(tabId, url);
+    const tab = new Tab(tabId, url, (linkUrl) => this.openLinkInNewTab(linkUrl));
 
     // Add the tab's WebContentsView to the window
     this._baseWindow.contentView.addChildView(tab.view);
@@ -196,7 +194,7 @@ export class Window {
    */
   createBackgroundTab(): Tab {
     const tabId = `tab-${++this.tabCounter}`;
-    const tab = new Tab(tabId);
+    const tab = new Tab(tabId, undefined, (linkUrl) => this.openLinkInNewTab(linkUrl));
     // Add BELOW the active tab so it renders but stays hidden behind it. A
     // setVisible(false) view is throttled by Chromium and won't fully load
     // pages — agents need it rendering, just not in front of the user.
