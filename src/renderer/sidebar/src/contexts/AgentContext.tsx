@@ -83,6 +83,9 @@ export const useAgent = (): AgentContextType => {
     return ctx
 }
 
+// The root agent's stable id (matches AgentService.agentId in main).
+const ROOT_AGENT_ID = 'agent-1'
+
 let obsCounter = 0
 let turnCounter = 0
 
@@ -181,12 +184,27 @@ export const AgentProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                 }))
                 break
 
-            case 'attempt-start':
-                // A retry: clear the failed attempt's streamed reasoning/code so
-                // the new attempt replaces it (steps + observations are kept as
-                // the running history of what happened).
-                upsertAgent(e.agentId, (prev) => ({ ...prev, reasoning: '', code: '', answer: null }))
+            case 'attempt-start': {
+                // A retry: clear the failed attempt's streamed reasoning/code/answer
+                // AND remove the stale sub-agents it spawned (they belong to the
+                // failed attempt and would otherwise linger below the new code).
+                const aid = e.agentId
+                setTurns((prevTurns) => {
+                    if (prevTurns.length === 0) return prevTurns
+                    const idx = prevTurns.length - 1
+                    const turn = prevTurns[idx]
+                    const nextAgents: Record<string, AgentState> = {}
+                    for (const [id, a] of Object.entries(turn.agents)) {
+                        // Drop descendants of the retrying agent.
+                        if (id !== aid && id.startsWith(aid + '.')) continue
+                        nextAgents[id] = id === aid ? { ...a, reasoning: '', code: '', answer: null } : a
+                    }
+                    const next = [...prevTurns]
+                    next[idx] = { ...turn, agents: nextAgents }
+                    return next
+                })
                 break
+            }
 
             case 'reasoning':
                 upsertAgent(e.agentId, (prev) => ({
@@ -246,6 +264,11 @@ export const AgentProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                     ...prev,
                     running: false,
                     lastRunOk: e.ok,
+                    // Surface a failure reason so the user isn't left with a silent
+                    // dead run (e.g. rate-limit / too-large errors).
+                    observations: !e.ok && e.error && e.error !== 'aborted'
+                        ? [...prev.observations, { id: ++obsCounter, stream: 'error' as const, text: e.error }]
+                        : prev.observations,
                 }))
                 break
 
@@ -261,15 +284,19 @@ export const AgentProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }, [handleEvent])
 
     const runAgent = useCallback(async (task: string) => {
-        const result = await window.sidebarAPI.runAgent(task)
-        const id = result.agentId
+        // Append the new turn BEFORE starting the run. The run's `run-start`
+        // event can arrive (via the event stream) before the IPC call resolves;
+        // if the new turn isn't in place yet, that event would reset the PREVIOUS
+        // turn's state (wiping its file cards). The root agentId is the stable
+        // "agent-1", so we can seed the turn without waiting for the result.
+        const id = ROOT_AGENT_ID
         rootAgentIdRef.current = id
         setRootAgentId(id)
-        // Append a new turn (chat style) — prior turns stay as history above.
         setTurns((prev) => [
             ...prev,
             { id: ++turnCounter, task, rootAgentId: id, agents: { [id]: makeAgentState(id, null, task) } },
         ])
+        await window.sidebarAPI.runAgent(task)
     }, [])
 
     const abortAgent = useCallback((agentId?: string) => {

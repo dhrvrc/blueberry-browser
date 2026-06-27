@@ -9,12 +9,10 @@ import type { IAgentStore } from "./AgentStore";
 import { stripTypes } from "./transpile";
 
 const RUN_TIMEOUT_MS = 120_000;
-// CodeAct feedback loop: if a run errors, the agent sees the error and rewrites
+// CodeAct error-retry: if a run errors, the agent sees the error and rewrites
 // the code, up to this many total attempts (1 initial + retries).
 const MAX_ATTEMPTS = 3;
 // How many recent history messages (user+assistant) to send to the model.
-// Assistant turns carry full code programs, so this bounds request size to stay
-// under the provider's tokens-per-minute limit. 6 ≈ last ~3 exchanges.
 const HISTORY_TURNS = 6;
 
 interface Deps {
@@ -44,15 +42,16 @@ export class AgentRunner {
   private lastScript: string | null = null;
   private approvalCounter = 0;
   private aborted = false;
-  // Runtime errors observed during the current attempt (SDK errors surfaced as
-  // error observations). Drives the CodeAct retry loop: a non-empty list after
-  // a script run means the agent should see the errors and try corrected code.
+  // Runtime errors observed during the current step (SDK errors surfaced as
+  // error observations). Populated by dispatchSdkCall; cleared at the start
+  // of each step so one step's errors don't bleed into the next.
   private runErrors: string[] = [];
   // The in-flight script run, settled by exec-done/exec-error or rejected on
   // worker death (abort/timeout/crash). Tracked here so the single persistent
   // port listener can resolve it without swapping handlers per run.
   private activeRun: { runId: string; resolve: () => void; reject: (e: Error) => void } | null = null;
-  // The return value from the most recent worker "return" message (cleared on run start).
+  // The return value from the most recent worker "return" message (cleared on
+  // attempt start — must not inherit a prior attempt's value).
   private lastReturn: string | null = null;
 
   constructor(agentId: string, deps: Deps) {
@@ -61,7 +60,7 @@ export class AgentRunner {
   }
 
   /**
-   * Fire-and-forget: run a new task through the full 9-step eval loop.
+   * Fire-and-forget: run a new task through the multi-turn eval loop.
    * Callers that need the return value use runCapture instead.
    */
   run(task: string): Promise<void> {
@@ -84,9 +83,10 @@ export class AgentRunner {
   }
 
   /**
-   * Core eval loop with a CodeAct feedback loop: generate code → run → if it
-   * errors, feed the error back to the model and let it write corrected code,
-   * up to MAX_ATTEMPTS. Both run() and runCapture() delegate here.
+   * Single-shot CodeAct eval loop with an error-retry: generate code, run it,
+   * and on a thrown error feed the error back and regenerate (up to MAX_ATTEMPTS).
+   * A prose-only response (no code block) is a conversational answer.
+   * Both run() and runCapture() delegate here.
    */
   private async executeRun(task: string): Promise<void> {
     this.abortController = new AbortController();
@@ -94,13 +94,10 @@ export class AgentRunner {
     this.lastReturn = null;
     const { emit, store } = this.deps;
 
-    // Emit run-start; record user turn.
     emit({ kind: "run-start", agentId: this.agentId, task });
     store.append(this.agentId, { role: "user", content: task });
 
     try {
-      // The instruction for the current attempt: the task, or a correction
-      // request carrying the previous attempt's error after a failure.
       let instruction = task;
       for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
         if (this.aborted) break;
@@ -114,7 +111,7 @@ export class AgentRunner {
             kind: "observation",
             agentId: this.agentId,
             stream: "warn",
-            text: `Hit an error — feeding it back to the agent to correct and re-run.`,
+            text: "Hit an error — feeding it back to the agent to correct and re-run.",
           });
           instruction =
             `Your previous code failed with this error:\n${error}\n\n` +
@@ -137,22 +134,20 @@ export class AgentRunner {
   }
 
   /**
-   * One attempt: generate code from `instruction`, transpile, run it.
-   * Returns an error string if the attempt failed (script threw, transpile
-   * error, or a runtime SDK error was observed), or null on success.
+   * One attempt: stream an LLM turn, then either run its code or (if prose-only)
+   * treat the prose as the final answer. Returns an error string if the attempt
+   * failed (script threw, transpile error, or a runtime SDK error), or null on success.
    */
   private async attempt(instruction: string, attempt: number): Promise<string | null> {
     const { emit, llm, store } = this.deps;
     this.runErrors = [];
+    this.lastReturn = null;
 
-    // On a retry, clear the previous attempt's streamed reasoning/code in the UI.
     if (attempt > 1) emit({ kind: "attempt-start", agentId: this.agentId });
 
-    // Cap history sent to the model: assistant turns carry full code programs,
-    // so unbounded history quickly blows the token-per-minute limit. Keep the
-    // most recent turns (drop the trailing user msg, which is passed as `task`).
-    const fullHistory = (await store.load(this.agentId)).slice(0, -1);
-    const history = fullHistory.slice(-HISTORY_TURNS);
+    const fullHistory = await store.load(this.agentId);
+    const history = fullHistory.slice(0, -1).slice(-HISTORY_TURNS);
+
     const stepId = `llm-${attempt}`;
     const label = attempt === 1 ? "Generating code" : "Revising code";
     emit({ kind: "step", agentId: this.agentId, stepId, label, status: "running" });
@@ -171,8 +166,7 @@ export class AgentRunner {
     const code = extractCode(fullText);
     store.append(this.agentId, { role: "assistant", content: fullText });
 
-    // No code block → the model chose to just answer (chat). Surface the prose
-    // as the result and finish — no transpile/execute.
+    // No code block → conversational answer.
     if (code === null) {
       const answer = extractProse(fullText);
       this.lastReturn = answer;
@@ -182,7 +176,6 @@ export class AgentRunner {
 
     emit({ kind: "code-complete", agentId: this.agentId, code });
 
-    // Transpile TS → JS (in-process; esbuild's service deadlocks in main).
     const tStep = `transpile-${attempt}`;
     emit({ kind: "step", agentId: this.agentId, stepId: tStep, label: "Compiling", status: "running" });
     let compiledJs: string;
@@ -196,16 +189,14 @@ export class AgentRunner {
     }
     emit({ kind: "step", agentId: this.agentId, stepId: tStep, label: "Compiling", status: "done" });
 
-    // Execute in the worker (approval handled inline by the port protocol).
     this.lastScript = compiledJs;
     try {
       await this.runScript(compiledJs);
     } catch (err) {
-      if (this.aborted) throw err; // let executeRun report the abort
+      if (this.aborted) throw err;
       return err instanceof Error ? err.message : String(err);
     }
-    // The script finished without throwing, but SDK calls inside it may have
-    // errored (e.g. a runJs failure) — those are retry-worthy too.
+    // A script that finished but had SDK errors (e.g. a runJs failure) is retry-worthy.
     return this.runErrors.length > 0 ? this.runErrors.join("; ") : null;
   }
 
@@ -465,7 +456,8 @@ export class AgentRunner {
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 // Returns the fenced code block, or null if the response is prose-only (a chat
-// answer). The unified blueberry assistant writes code only when it needs to act.
+// answer or the done-signal). The unified blueberry assistant writes code only
+// when it needs to act; prose-only = the task is done.
 function extractCode(text: string): string | null {
   const match = text.match(/```(?:ts|typescript|js|javascript)?\n([\s\S]*?)```/);
   return match ? match[1].trim() : null;

@@ -89,8 +89,8 @@ const ObservationsLog: React.FC<{ observations: ObservationState[] }> = ({ obser
     )
 }
 
-const ReasoningBlock: React.FC<{ text: string }> = ({ text }) => {
-    const [open, setOpen] = useState(true)
+const ReasoningBlock: React.FC<{ text: string; label?: string; defaultOpen?: boolean }> = ({ text, label = 'Reasoning', defaultOpen = true }) => {
+    const [open, setOpen] = useState(defaultOpen)
     if (!text) return null
     return (
         <div className="space-y-1">
@@ -99,7 +99,7 @@ const ReasoningBlock: React.FC<{ text: string }> = ({ text }) => {
                 className="flex items-center gap-1 text-xs font-medium text-muted-foreground uppercase tracking-wider"
             >
                 {open ? <ChevronDown className="size-3" /> : <ChevronRight className="size-3" />}
-                Reasoning
+                {label}
             </button>
             {open && (
                 <div className="text-sm text-muted-foreground italic whitespace-pre-wrap bg-muted/30 rounded-lg p-3">
@@ -205,56 +205,60 @@ const AgentNode: React.FC<AgentNodeProps> = ({ agent, agents, depth, approve, op
             )}
 
             {open && (
-                agent.answer !== null ? (
-                    // Conversational reply (no code was run) — render as a chat message.
-                    <div className="text-foreground whitespace-pre-wrap leading-relaxed text-sm">
-                        {agent.answer}
-                    </div>
-                ) : (
                 <div className="space-y-3">
-                    {/* Status banner */}
-                    {agent.statusText && (
-                        <div className="text-xs text-muted-foreground bg-muted/40 rounded px-3 py-2">
-                            {agent.statusText}
+                    {agent.answer !== null ? (
+                        // Conversational reply (no code was run) — render as a chat message.
+                        <div className="text-foreground whitespace-pre-wrap leading-relaxed text-sm">
+                            {agent.answer}
                         </div>
+                    ) : (
+                    <div className="space-y-3">
+                        {/* Status banner */}
+                        {agent.statusText && (
+                            <div className="text-xs text-muted-foreground bg-muted/40 rounded px-3 py-2">
+                                {agent.statusText}
+                            </div>
+                        )}
+
+                        {/* Reasoning */}
+                        <ReasoningBlock text={agent.reasoning} />
+
+                        {/* Streaming code */}
+                        <CodeBlock code={agent.code} />
+
+                        {/* Step timeline */}
+                        <StepTimeline steps={agent.steps} />
+
+                        {/* Inline approval */}
+                        {agent.lastApproval && (
+                            <ApprovalPrompt
+                                requestId={agent.lastApproval.requestId}
+                                message={agent.lastApproval.message}
+                                onApprove={(a) => approve(agent.agentId, agent.lastApproval!.requestId, a)}
+                            />
+                        )}
+
+                        {/* Spawned children run here — shown BEFORE this agent's
+                            observations so the parent's aggregated result lands at
+                            the bottom, after the children that produced it. */}
+                        {children.map((child) => (
+                            <AgentNode
+                                key={child.agentId}
+                                agent={child}
+                                agents={agents}
+                                depth={depth + 1}
+                                approve={approve}
+                                openFile={openFile}
+                            />
+                        ))}
+
+                        {/* Observations (incl. the final aggregated return) */}
+                        <ObservationsLog observations={agent.observations} />
+                    </div>
                     )}
 
-                    {/* Reasoning */}
-                    <ReasoningBlock text={agent.reasoning} />
-
-                    {/* Streaming code */}
-                    <CodeBlock code={agent.code} />
-
-                    {/* Step timeline */}
-                    <StepTimeline steps={agent.steps} />
-
-                    {/* Inline approval */}
-                    {agent.lastApproval && (
-                        <ApprovalPrompt
-                            requestId={agent.lastApproval.requestId}
-                            message={agent.lastApproval.message}
-                            onApprove={(a) => approve(agent.agentId, agent.lastApproval!.requestId, a)}
-                        />
-                    )}
-
-                    {/* Spawned children run here — shown BEFORE this agent's
-                        observations so the parent's aggregated result lands at
-                        the bottom, after the children that produced it. */}
-                    {children.map((child) => (
-                        <AgentNode
-                            key={child.agentId}
-                            agent={child}
-                            agents={agents}
-                            depth={depth + 1}
-                            approve={approve}
-                            openFile={openFile}
-                        />
-                    ))}
-
-                    {/* Observations (incl. the final aggregated return) */}
-                    <ObservationsLog observations={agent.observations} />
-
-                    {/* Generated file cards — click to open the rendered viewer */}
+                    {/* Generated file cards — ALWAYS shown (even when the agent also
+                        gave a prose answer), so a produced file never disappears. */}
                     {agent.files.length > 0 && (
                         <div className="space-y-1.5">
                             {agent.files.map((f, i) => (
@@ -263,7 +267,6 @@ const AgentNode: React.FC<AgentNodeProps> = ({ agent, agents, depth, approve, op
                         </div>
                     )}
                 </div>
-                )
             )}
         </div>
     )
