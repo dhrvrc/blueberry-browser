@@ -12,6 +12,13 @@ export class Window {
   private tabCounter: number = 0;
   /** Tab IDs created for agent background use — excluded from get-tabs. */
   private backgroundTabIds: Set<string> = new Set();
+  /**
+   * Maps an agent background tab → the popup tabs its page spawned
+   * (target="_blank"/window.open). These are owned by the agent and reaped
+   * when the agent tab is destroyed, so an agent's own browsing never leaves
+   * orphan tabs behind. See createAgentChildTab / destroyTab.
+   */
+  private agentChildTabs: Map<string, Set<string>> = new Map();
   private _topBar: TopBar;
   private _sideBar: SideBar;
   private _tabService: TabService = new TabService(
@@ -98,6 +105,33 @@ export class Window {
   private openLinkInNewTab(url: string): void {
     const tab = this.createTab(url);
     this.switchActiveTab(tab.id);
+  }
+
+  /**
+   * Open a popup from an AGENT tab (`ownerTabId`) as a hidden child tab owned by
+   * that agent, rather than a focused user tab. The child renders like any other
+   * background tab and is recorded under the agent's root owner so destroyTab can
+   * reap the whole tree when the agent finishes. Its own popups nest under the
+   * same root owner (resolved via agentChildTabs), so chains don't leak either.
+   */
+  private createAgentChildTab(ownerTabId: string, url: string): void {
+    // Resolve to the ROOT agent owner: if ownerTabId is itself a tracked child,
+    // attribute the new popup to the agent at the top of the chain.
+    let rootOwner = ownerTabId;
+    for (const [owner, children] of this.agentChildTabs) {
+      if (children.has(ownerTabId)) {
+        rootOwner = owner;
+        break;
+      }
+    }
+    const child = this.createBackgroundTab();
+    child.loadURL(url);
+    let set = this.agentChildTabs.get(rootOwner);
+    if (!set) {
+      set = new Set();
+      this.agentChildTabs.set(rootOwner, set);
+    }
+    set.add(child.id);
   }
 
   // Tab management methods
@@ -194,7 +228,11 @@ export class Window {
    */
   createBackgroundTab(): Tab {
     const tabId = `tab-${++this.tabCounter}`;
-    const tab = new Tab(tabId, undefined, (linkUrl) => this.openLinkInNewTab(linkUrl));
+    // An agent tab's popups (target="_blank"/window.open) open as HIDDEN child
+    // tabs parented to this agent — not focused user tabs. They're tracked in
+    // agentChildTabs and reaped when this agent tab is destroyed, so the agent's
+    // own browsing never leaves orphan tabs behind.
+    const tab = new Tab(tabId, undefined, (linkUrl) => this.createAgentChildTab(tabId, linkUrl));
     // Add BELOW the active tab so it renders but stays hidden behind it. A
     // setVisible(false) view is throttled by Chromium and won't fully load
     // pages — agents need it rendering, just not in front of the user.
@@ -218,6 +256,16 @@ export class Window {
   destroyTab(tabId: string): void {
     const tab = this.tabsMap.get(tabId);
     if (!tab) return;
+
+    // Reap any popup tabs this agent tab spawned (target="_blank"/window.open),
+    // so an agent's own browsing leaves no orphan tabs behind. Done before the
+    // parent teardown; childIds are deleted from agentChildTabs as we go.
+    const childIds = this.agentChildTabs.get(tabId);
+    if (childIds) {
+      this.agentChildTabs.delete(tabId);
+      for (const childId of childIds) this.destroyTab(childId);
+    }
+
     try {
       this._baseWindow.contentView.removeChildView(tab.view);
       tab.destroy();
