@@ -28,17 +28,17 @@ const DEFAULT_MODELS: Record<LLMProvider, string> = {
 };
 
 // Model for the ROOT agent's code generation (multi-step planning).
-// On gpt-5.4 temporarily — gpt-5.1's daily request quota (RPD) is exhausted on
-// the unverified-tier account. Switch back to gpt-5.1 once billing is added.
+// Now on Anthropic Opus 4.8 (LLM_PROVIDER=anthropic). The OpenAI entry stays
+// as a fallback if the provider is flipped back to openai.
 const AGENT_MODELS: Record<LLMProvider, string> = {
   openai: "gpt-5.4",
-  anthropic: "claude-3-5-sonnet-20241022",
+  anthropic: "claude-opus-4-8",
 };
 
 // Model for SPAWNED sub-agents — same as root for reliable page extraction.
 const SUBAGENT_MODELS: Record<LLMProvider, string> = {
   openai: "gpt-5.4",
-  anthropic: "claude-3-5-sonnet-20241022",
+  anthropic: "claude-opus-4-8",
 };
 
 const MAX_CONTEXT_LENGTH = 4000;
